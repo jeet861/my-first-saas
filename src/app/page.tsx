@@ -5,13 +5,13 @@ import Navbar from "@/components/Navbar";
 import UploadZone from "@/components/UploadZone";
 import AnalysisDisplay from "@/components/AnalysisDisplay";
 import { analyzeChartAction } from "./actions";
-import Image from "next/image";
+import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
 
 export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const handleStartAnalysis = () => {
@@ -126,18 +126,38 @@ export default function Home() {
             />
 
             {selectedFile && !loading && !analysis && (
-              <button
-                onClick={handleAnalyze}
-                className="btn-primary"
-                style={{
-                  marginTop: "1.5rem",
-                  width: "100%",
-                  padding: "1rem",
-                  fontSize: "1.1rem"
-                }}
-              >
-                Run Analysis
-              </button>
+              <div style={{ marginTop: "1.5rem" }}>
+                <SignedIn>
+                  <button
+                    onClick={handleAnalyze}
+                    className="btn-primary"
+                    style={{
+                      width: "100%",
+                      padding: "1rem",
+                      fontSize: "1.1rem"
+                    }}
+                  >
+                    Run Analysis
+                  </button>
+                </SignedIn>
+
+                <SignedOut>
+                  <div style={{
+                    textAlign: "center",
+                    padding: "2rem",
+                    backgroundColor: "white",
+                    borderRadius: "12px",
+                    border: "1px solid var(--border)"
+                  }}>
+                    <p style={{ marginBottom: "1rem", fontWeight: 500 }}>Please sign in to run chart analysis.</p>
+                    <SignInButton mode="modal">
+                      <button className="btn-primary" style={{ padding: "0.75rem 2rem" }}>
+                        Sign In to Analyze
+                      </button>
+                    </SignInButton>
+                  </div>
+                </SignedOut>
+              </div>
             )}
 
             <AnalysisDisplay loading={loading} analysis={analysis} />

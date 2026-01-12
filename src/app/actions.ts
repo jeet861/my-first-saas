@@ -1,10 +1,22 @@
 "use server";
 
 import OpenAI from "openai";
+import { auth } from "@clerk/nextjs/server";
+import { supabase } from "@/lib/supabase";
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient() {
+    if (!openaiClient) {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey || apiKey === "sk-your-actual-key-here") {
+            throw new Error("OPENAI_API_KEY is missing or invalid in .env.local");
+        }
+        openaiClient = new OpenAI({ apiKey });
+    }
+    return openaiClient;
+}
 
 export type AnalysisResult = {
     title: string;
@@ -31,6 +43,7 @@ export async function analyzeChartAction(formData: FormData): Promise<AnalysisRe
     const dataUrl = `data:${file.type};base64,${base64Image}`;
 
     try {
+        const openai = getOpenAIClient();
         const response = await openai.chat.completions.create({
             model: "gpt-4o",
             response_format: { type: "json_object" },
@@ -68,11 +81,51 @@ export async function analyzeChartAction(formData: FormData): Promise<AnalysisRe
 
         const content = response.choices[0].message.content;
         if (!content) throw new Error("No content returned");
+        const analysisResult = JSON.parse(content);
 
-        return JSON.parse(content);
+        // Save to Supabase
+        const { userId } = await auth();
+        if (userId) {
+            const { error: dbError } = await supabase
+                .from('analyses')
+                .insert({
+                    user_id: userId,
+                    title: analysisResult.title,
+                    signal: analysisResult.signal,
+                    confidence: analysisResult.confidence,
+                    reasoning: analysisResult.reasoning,
+                    key_levels: analysisResult.key_levels
+                });
+
+            if (dbError) {
+                console.error("Supabase Save Error:", dbError);
+            }
+        }
+
+        return analysisResult;
 
     } catch (error) {
         console.error("OpenAI API Error:", error);
         return { error: "Failed to analyze chart. Please try again." };
     }
+}
+
+export async function fetchHistoryAction() {
+    const { userId } = await auth();
+    if (!userId) {
+        return { error: "Not authenticated" };
+    }
+
+    const { data, error } = await supabase
+        .from('analyses')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Supabase Fetch Error:", error);
+        return { error: "Failed to fetch history" };
+    }
+
+    return data;
 }
